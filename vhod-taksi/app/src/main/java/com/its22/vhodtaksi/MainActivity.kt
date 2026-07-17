@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -21,6 +23,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var rv: RecyclerView
     private lateinit var tvSummary: TextView
+    private lateinit var btnPeriod: MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,10 +31,12 @@ class MainActivity : AppCompatActivity() {
         ensureBtPermissions()
 
         tvSummary = findViewById(R.id.tvSummary)
+        btnPeriod = findViewById(R.id.btnPeriod)
         rv = findViewById(R.id.rvApts)
         rv.layoutManager = LinearLayoutManager(this)
         rv.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
 
+        btnPeriod.setOnClickListener { showPeriodDialog() }
         findViewById<MaterialButton>(R.id.btnData).setOnClickListener {
             startActivity(Intent(this, DataActivity::class.java))
         }
@@ -49,10 +54,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refresh() {
-        val apts = Prefs.apartments(this)
-        val exps = Prefs.expenses(this)
-        val incs = Prefs.incomes(this)
         val period = Prefs.period(this)
+        val apts = Prefs.apartments(this, period)
+        val exps = Prefs.expenses(this, period)
+        val incs = Prefs.incomes(this, period)
         val rate = Calc.compute(apts, exps, incs)
         val paid = Db(this).paidApartments(period)
 
@@ -64,8 +69,57 @@ class MainActivity : AppCompatActivity() {
 
         val (cnt, sum) = Db(this).sumForPeriod(period)
         title = Prefs.businessName(this)
-        tvSummary.text = "Период: " + period + "\nСъбрано: " + eur(this, sum) +
-            "   |   Платили: " + cnt + " от " + apts.size + " ап."
+        btnPeriod.text = "Месец: " + period + "  ▾"
+        tvSummary.text = "Събрано: " + eur(this, sum) + "   |   Платили: " + cnt + " от " + apts.size + " ап."
+    }
+
+    private fun showPeriodDialog() {
+        val periods = Prefs.periods(this)
+        val items = ArrayList<String>()
+        for (p in periods) items.add(p)
+        items.add("＋ Генерирай нов месец")
+        val arr = items.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Изберете месец")
+            .setItems(arr) { _, which ->
+                if (which < periods.size) {
+                    Prefs.setPeriod(this, periods[which])
+                    refresh()
+                } else {
+                    newMonthDialog()
+                }
+            }
+            .show()
+    }
+
+    private fun newMonthDialog() {
+        val cur = Prefs.period(this)
+        val suggested = Prefs.suggestNextPeriod(cur)
+        val et = EditText(this)
+        et.setText(suggested)
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(pad, pad / 2, pad, 0)
+        box.addView(et)
+
+        AlertDialog.Builder(this)
+            .setTitle("Нов месец")
+            .setMessage("Ще се копират апартаментите и разходите от " + cur + ". После можеш да нанесеш промени. Всички ще са отбелязани като неплатили.")
+            .setView(box)
+            .setPositiveButton("Създай и редактирай") { _, _ ->
+                val name = et.text.toString().trim()
+                if (name.isEmpty()) { toast("Въведете месец"); return@setPositiveButton }
+                if (Prefs.periods(this).contains(name)) {
+                    toast("Такъв месец вече съществува — избери го от списъка")
+                    return@setPositiveButton
+                }
+                Prefs.generateNewMonth(this, name)
+                refresh()
+                startActivity(Intent(this, DataActivity::class.java))
+            }
+            .setNegativeButton("Отказ", null)
+            .show()
     }
 
     private fun collectDialog(row: ApartmentAdapter.Row, rate: Calc.Result, period: String) {
@@ -137,7 +191,7 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     Toast.makeText(
                         this,
-                        "Грешка при печат: " + (e.message ?: "") + "\n(Плащането е записано - виж Отчет за повторен печат)",
+                        "Грешка при печат: " + (e.message ?: "") + "\n(Плащането е записано - виж Справка за повторен печат)",
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -151,7 +205,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 Sync.push(this)
             } catch (e: Exception) {
-                // тихо - ще се синхронизира по-късно (ръчно от Настройки)
+                // тихо
             }
         }.start()
     }
@@ -168,4 +222,6 @@ class MainActivity : AppCompatActivity() {
             if (need) ActivityCompat.requestPermissions(this, perms, 1)
         }
     }
+
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 }

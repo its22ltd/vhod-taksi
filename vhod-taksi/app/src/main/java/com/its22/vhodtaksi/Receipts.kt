@@ -32,7 +32,6 @@ object Receipts {
         if (apt.name.isNotBlank()) L.add(Escpos.Line("Живущ: " + apt.name, size = 24f))
         L.add(Escpos.Line("Брой хора: " + apt.people, size = 24f))
         L.add(Escpos.Line(separator = true, size = 24f))
-        // разбивка
         L.add(Escpos.Line(text = "Персонална сума:", rightText = money2(due.personal) + " " + cur, size = 24f))
         if (apt.paysElevator && due.elevatorShare > 0.0) {
             L.add(
@@ -59,44 +58,47 @@ object Receipts {
         return L
     }
 
-    /** Отчет за периода */
-    fun report(
+    /** Справка за периода: финанси + кой апартамент е платил/дължи */
+    fun fullReport(
         ctx: Context,
         period: String,
+        apts: List<Apartment>,
         r: Calc.Result,
-        exps: List<ExpenseItem>,
-        incs: List<IncomeItem>,
-        totalDue: Double,
+        paid: Set<String>,
         collectedCount: Int,
-        collectedSum: Double,
-        aptCount: Int
+        collectedSum: Double
     ): List<Escpos.Line> {
         val cur = Prefs.currency(ctx)
         val L = ArrayList<Escpos.Line>()
-        L.add(Escpos.Line(Prefs.businessName(ctx), size = 36f, bold = true, align = Escpos.Align.CENTER, extra = 10f))
-        L.add(Escpos.Line("ОТЧЕТ", size = 32f, bold = true, align = Escpos.Align.CENTER))
-        L.add(Escpos.Line("Период: " + period, size = 26f, align = Escpos.Align.CENTER, extra = 8f))
+        L.add(Escpos.Line(Prefs.businessName(ctx), size = 34f, bold = true, align = Escpos.Align.CENTER, extra = 8f))
+        L.add(Escpos.Line("СПРАВКА", size = 30f, bold = true, align = Escpos.Align.CENTER))
+        L.add(Escpos.Line("Период: " + period, size = 24f, align = Escpos.Align.CENTER, extra = 8f))
         L.add(Escpos.Line(separator = true, size = 24f))
-        L.add(Escpos.Line("РАЗХОДИ", size = 24f, bold = true))
-        for (e in exps) {
-            val tag = if (e.elevator) " (асансьор)" else ""
-            L.add(Escpos.Line(text = e.label + tag + ":", rightText = money2(e.amount) + " " + cur, size = 22f))
-        }
-        L.add(Escpos.Line(text = "Общо разходи:", rightText = money2(r.totalExpenses) + " " + cur, size = 26f, bold = true, extra = 8f))
-        L.add(Escpos.Line(separator = true, size = 24f))
-        L.add(Escpos.Line("ПРИХОДИ", size = 24f, bold = true))
-        for (i in incs) {
-            L.add(Escpos.Line(text = i.label + ":", rightText = money2(i.amount) + " " + cur, size = 22f))
-        }
-        L.add(Escpos.Line(text = "Общо приходи:", rightText = money2(r.totalIncome) + " " + cur, size = 24f, bold = true, extra = 8f))
-        L.add(Escpos.Line(separator = true, size = 24f))
+        L.add(Escpos.Line(text = "Разходи общо:", rightText = money2(r.totalExpenses) + " " + cur, size = 24f))
+        L.add(Escpos.Line(text = "Приходи общо:", rightText = money2(r.totalIncome) + " " + cur, size = 24f))
         L.add(Escpos.Line(text = "Дял асансьор/чов.:", rightText = money2(r.ratePerElevator) + " " + cur, size = 22f))
-        L.add(Escpos.Line(text = "Дял други/чов.:", rightText = money2(r.ratePerOther) + " " + cur, size = 22f))
+        L.add(Escpos.Line(text = "Дял други/чов.:", rightText = money2(r.ratePerOther) + " " + cur, size = 22f, extra = 8f))
         L.add(Escpos.Line(separator = true, size = 24f))
-        L.add(Escpos.Line(text = "Дължимо общо:", rightText = money2(totalDue) + " " + cur, size = 24f))
-        L.add(Escpos.Line(text = "Събрано:", rightText = money2(collectedSum) + " " + cur, size = 28f, bold = true, extra = 8f))
-        L.add(Escpos.Line("Платили: " + collectedCount + " от " + aptCount + " ап.", size = 22f))
-        L.add(Escpos.Line(text = "Разлика (събрано-разходи):", rightText = money2(collectedSum - r.totalExpenses) + " " + cur, size = 22f, extra = 8f))
+
+        var dueTotal = 0.0
+        var unpaidTotal = 0.0
+        var unpaidCount = 0
+        for (a in apts) {
+            val d = Calc.due(a, r)
+            dueTotal = Calc.round2(dueTotal + d.total)
+            val isPaid = paid.contains(a.number)
+            val mark = if (isPaid) "  платено" else "  ДЪЛЖИ"
+            if (!isPaid) {
+                unpaidTotal = Calc.round2(unpaidTotal + d.total)
+                unpaidCount += 1
+            }
+            L.add(Escpos.Line(text = "Ап. " + a.number + mark, rightText = money2(d.total) + " " + cur, size = 22f))
+        }
+        L.add(Escpos.Line(separator = true, size = 24f))
+        L.add(Escpos.Line(text = "Дължимо общо:", rightText = money2(dueTotal) + " " + cur, size = 24f))
+        L.add(Escpos.Line(text = "Събрано:", rightText = money2(collectedSum) + " " + cur, size = 28f, bold = true))
+        L.add(Escpos.Line("Платили: " + collectedCount + " от " + apts.size + " ап.", size = 22f))
+        L.add(Escpos.Line(text = "Неплатено (" + unpaidCount + " ап.):", rightText = money2(unpaidTotal) + " " + cur, size = 26f, bold = true, extra = 8f))
         L.add(Escpos.Line(separator = true, size = 24f))
         L.add(Escpos.Line("Не е фискален документ", size = 22f, align = Escpos.Align.CENTER, extra = 10f))
         return L

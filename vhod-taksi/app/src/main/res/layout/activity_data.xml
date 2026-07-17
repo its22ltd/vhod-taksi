@@ -13,100 +13,74 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textStyle="bold"
-            android:text="Период (месец)" />
-
-        <EditText
-            android:id="@+id/etPeriod"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="text" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:textStyle="bold"
+            android:textSize="18sp"
             android:text="Апартаменти" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:text="По ред:  номер ; име ; хора ; персонална сума ; асансьор(да/не)" />
-
-        <EditText
-            android:id="@+id/etApts"
+        <LinearLayout
+            android:id="@+id/containerApts"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="top"
-            android:minLines="6"
-            android:fontFamily="monospace"
-            android:textSize="13sp"
-            android:inputType="textMultiLine" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:textStyle="bold"
-            android:text="Разходи" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:text="По ред:  перо ; сума ; група (асансьор или други)" />
-
-        <EditText
-            android:id="@+id/etExps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="top"
-            android:minLines="4"
-            android:fontFamily="monospace"
-            android:textSize="13sp"
-            android:inputType="textMultiLine" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:textStyle="bold"
-            android:text="Приходи" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:text="По ред:  перо ; сума" />
-
-        <EditText
-            android:id="@+id/etIncs"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="top"
-            android:minLines="2"
-            android:fontFamily="monospace"
-            android:textSize="13sp"
-            android:inputType="textMultiLine" />
+            android:orientation="vertical" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnPreview"
+            android:id="@+id/btnAddApt"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
             android:textAllCaps="false"
-            android:text="Преизчисли (преглед)" />
+            android:text="+ Добави апартамент" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:text="Разходи" />
+
+        <LinearLayout
+            android:id="@+id/containerExps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddExp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="+ Добави разход" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:text="Приходи" />
+
+        <LinearLayout
+            android:id="@+id/containerIncs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddInc"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="+ Добави приход" />
 
         <TextView
             android:id="@+id/tvPreview"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="16dp"
             android:padding="10dp"
             android:background="#11000000"
-            android:fontFamily="monospace"
             android:textSize="13sp" />
 
         <com.google.android.material.button.MaterialButton

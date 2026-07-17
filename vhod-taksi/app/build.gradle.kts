@@ -15,13 +15,26 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("app") {
+            storeFile = file("vhodtaksi.keystore")
+            storePassword = "vhodtaksi"
+            keyAlias = "vhodtaksi"
+            keyPassword = "vhodtaksi"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("app")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("app")
         }
     }
 

@@ -1,6 +1,7 @@
 package com.its22.vhodtaksi
 
 import android.os.Bundle
+import android.widget.CheckBox
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -8,63 +9,85 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.button.MaterialButton
 
 class ReportActivity : AppCompatActivity() {
+
+    private lateinit var rv: RecyclerView
+    private lateinit var allRows: List<StatusAdapter.Row>
+    private lateinit var rate: Calc.Result
+    private lateinit var period: String
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_report)
-        title = "Отчет"
+        title = "Справка"
 
-        val apts = Prefs.apartments(this)
-        val exps = Prefs.expenses(this)
-        val incs = Prefs.incomes(this)
-        val period = Prefs.period(this)
+        period = Prefs.period(this)
+        val apts = Prefs.apartments(this, period)
+        val exps = Prefs.expenses(this, period)
+        val incs = Prefs.incomes(this, period)
+        rate = Calc.compute(apts, exps, incs)
+        val paid = Db(this).paidApartments(period)
+        val (cnt, sum) = Db(this).sumForPeriod(period)
         val cur = Prefs.currency(this)
-        val r = Calc.compute(apts, exps, incs)
-        val totalDue = Calc.totalDue(apts, r)
-        val db = Db(this)
-        val (cnt, sum) = db.sumForPeriod(period)
+
+        val sorted = apts.sortedBy { it.number.toIntOrNull() ?: Int.MAX_VALUE }
+        allRows = sorted.map { a -> StatusAdapter.Row(a, Calc.due(a, rate), paid.contains(a.number)) }
+
+        val dueTotal = Calc.totalDue(apts, rate)
+        val unpaidRows = allRows.filter { !it.paid }
+        val unpaidTotal = Calc.round2(unpaidRows.sumOf { it.due.total })
 
         val sb = StringBuilder()
         sb.append("Период: ").append(period).append("\n")
-        sb.append("Разходи общо: ").append(money2(r.totalExpenses)).append(" ").append(cur).append("\n")
-        sb.append("Приходи общо: ").append(money2(r.totalIncome)).append(" ").append(cur).append("\n")
-        sb.append("Дял/чов. — асансьор: ").append(money2(r.ratePerElevator)).append(" ").append(cur)
-        sb.append(", други: ").append(money2(r.ratePerOther)).append(" ").append(cur).append("\n")
-        sb.append("Дължимо общо: ").append(money2(totalDue)).append(" ").append(cur).append("\n")
+        sb.append("Дължимо общо: ").append(money2(dueTotal)).append(" ").append(cur).append("\n")
         sb.append("Събрано: ").append(money2(sum)).append(" ").append(cur)
         sb.append("  (").append(cnt).append(" от ").append(apts.size).append(" ап.)\n")
-        sb.append("Разлика (събрано-разходи): ").append(money2(sum - r.totalExpenses)).append(" ").append(cur)
-        val un = db.countUnsynced()
-        if (un > 0) sb.append("\nНесинхронизирани: ").append(un)
+        sb.append("Неплатено: ").append(money2(unpaidTotal)).append(" ").append(cur)
+        sb.append("  (").append(unpaidRows.size).append(" ап.)")
         findViewById<TextView>(R.id.tvReport).text = sb.toString()
 
-        val rv = findViewById<RecyclerView>(R.id.rvPayments)
+        rv = findViewById(R.id.rvStatus)
         rv.layoutManager = LinearLayoutManager(this)
         rv.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
-        rv.adapter = PaymentAdapter(db.forPeriod(period), cur) { rec -> reprint(rec) }
+        bind(false)
 
-        findViewById<MaterialButton>(R.id.btnPrintReport).setOnClickListener {
-            printLines(Receipts.report(this, period, r, exps, incs, totalDue, cnt, sum, apts.size))
-        }
+        val cb = findViewById<CheckBox>(R.id.cbUnpaid)
+        cb.setOnCheckedChangeListener { _, checked -> bind(checked) }
+
+        findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPrintReport)
+            .setOnClickListener {
+                printLines(Receipts.fullReport(this, period, apts, rate, paid, cnt, sum))
+            }
     }
 
-    private fun reprint(rec: PaymentRecord) {
-        AlertDialog.Builder(this)
-            .setTitle("Ап. " + rec.apt + " — повторен печат?")
-            .setMessage("Сума: " + eur(this, rec.amount) + "  (" + rec.period + ")")
-            .setPositiveButton("Печат") { _, _ ->
-                val apt = Apartment(rec.apt, rec.name, rec.people, rec.personal, rec.elevatorShare > 0.0)
-                val due = Calc.Due(rec.personal, rec.elevatorShare, rec.otherShare)
-                val ratePerElev = if (rec.people > 0) rec.elevatorShare / rec.people else 0.0
-                val ratePerOther = if (rec.people > 0) rec.otherShare / rec.people else 0.0
-                val rate = Calc.Result(0.0, 0.0, 0.0, 0.0, 0, 0, ratePerElev, ratePerOther)
-                printLines(Receipts.payment(this, apt, due, rate, rec.period, rec.ts))
+    private fun bind(onlyUnpaid: Boolean) {
+        val rows = if (onlyUnpaid) allRows.filter { !it.paid } else allRows
+        rv.adapter = StatusAdapter(rows, Prefs.currency(this)) { row -> onRow(row) }
+    }
+
+    private fun onRow(row: StatusAdapter.Row) {
+        val cur = Prefs.currency(this)
+        val a = row.apt
+        val d = row.due
+        val sb = StringBuilder()
+        sb.append("Персонална: ").append(money2(d.personal)).append(" ").append(cur).append("\n")
+        if (d.elevatorShare > 0.0)
+            sb.append("Асансьор: ").append(money2(d.elevatorShare)).append(" ").append(cur).append("\n")
+        sb.append("Други: ").append(money2(d.otherShare)).append(" ").append(cur).append("\n")
+        sb.append("ОБЩО: ").append(money2(d.total)).append(" ").append(cur).append("\n\n")
+        sb.append(if (row.paid) "Статус: ПЛАТЕНО" else "Статус: НЕ Е ПЛАТЕНО")
+
+        val b = AlertDialog.Builder(this)
+            .setTitle("Ап. " + a.number + (if (a.name.isNotBlank()) " — " + a.name else ""))
+            .setMessage(sb.toString())
+            .setNegativeButton("Затвори", null)
+        if (row.paid) {
+            b.setPositiveButton("Печат отново") { _, _ ->
+                printLines(Receipts.payment(this, a, d, rate, period, System.currentTimeMillis()))
             }
-            .setNegativeButton("Отказ", null)
-            .show()
+        }
+        b.show()
     }
 
     private fun printLines(lines: List<Escpos.Line>) {
