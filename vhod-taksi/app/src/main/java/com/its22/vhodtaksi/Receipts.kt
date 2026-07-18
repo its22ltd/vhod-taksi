@@ -16,7 +16,8 @@ object Receipts {
         due: Calc.Due,
         rate: Calc.Result,
         period: String,
-        ts: Long
+        ts: Long,
+        signature: android.graphics.Bitmap? = null
     ): List<Escpos.Line> {
         val cur = Prefs.currency(ctx)
         val L = ArrayList<Escpos.Line>()
@@ -50,7 +51,12 @@ object Receipts {
         L.add(Escpos.Line(separator = true, size = 24f))
         L.add(Escpos.Line(text = "ОБЩО:", rightText = money2(due.total) + " " + cur, size = 34f, bold = true, extra = 14f))
         L.add(Escpos.Line(separator = true, size = 24f))
-        L.add(Escpos.Line("Подпис: ____________________", size = 24f, extra = 16f))
+        if (signature != null) {
+            L.add(Escpos.Line("Подпис:", size = 22f))
+            L.add(Escpos.Line(image = signature, extra = 8f))
+        } else {
+            L.add(Escpos.Line("Подпис: ____________________", size = 24f, extra = 16f))
+        }
         L.add(Escpos.Line(separator = true, size = 24f))
         L.add(Escpos.Line("НЕ Е ФИСКАЛЕН ДОКУМЕНТ", size = 24f, bold = true, align = Escpos.Align.CENTER, extra = 10f))
         val f = Prefs.footer(ctx)

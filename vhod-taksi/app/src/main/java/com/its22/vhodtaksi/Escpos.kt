@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import java.io.ByteArrayOutputStream
 
@@ -22,8 +23,11 @@ object Escpos {
         val align: Align = Align.LEFT,
         val rightText: String = "",
         val separator: Boolean = false,
-        val extra: Float = 6f
+        val extra: Float = 6f,
+        val image: Bitmap? = null
     )
+
+    private const val MAX_IMG_H = 240f
 
     fun buildReceiptBitmap(width: Int, lines: List<Line>): Bitmap {
         val padTop = 14
@@ -33,6 +37,14 @@ object Escpos {
         val heights = ArrayList<Int>(lines.size)
         var total = padTop
         for (ln in lines) {
+            if (ln.image != null) {
+                val img = ln.image
+                val scale = minOf(width.toFloat() / img.width, MAX_IMG_H / img.height)
+                val h = (img.height * scale).toInt() + ln.extra.toInt()
+                heights.add(h)
+                total += h
+                continue
+            }
             paint.textSize = ln.size
             paint.typeface = if (ln.bold)
                 Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
@@ -52,6 +64,19 @@ object Escpos {
         var y = padTop
         for (i in lines.indices) {
             val ln = lines[i]
+
+            if (ln.image != null) {
+                val img = ln.image
+                val scale = minOf(width.toFloat() / img.width, MAX_IMG_H / img.height)
+                val dw = img.width * scale
+                val dh = img.height * scale
+                val left = (width - dw) / 2f
+                val dst = RectF(left, y.toFloat(), left + dw, y.toFloat() + dh)
+                canvas.drawBitmap(img, null, dst, null)
+                y += heights[i]
+                continue
+            }
+
             paint.textSize = ln.size
             paint.typeface = if (ln.bold)
                 Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)

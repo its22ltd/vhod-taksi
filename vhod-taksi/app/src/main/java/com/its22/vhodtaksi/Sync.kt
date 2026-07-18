@@ -34,6 +34,8 @@ object Sync {
             o.put("elevatorShare", r.elevatorShare)
             o.put("otherShare", r.otherShare)
             o.put("ts", r.ts)
+            val sig = Signatures.loadBase64(ctx, r.uuid)
+            if (sig != null) o.put("signature", sig)
             arr.put(o)
         }
         val body = JSONObject()

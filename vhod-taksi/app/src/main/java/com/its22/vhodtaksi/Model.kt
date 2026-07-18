@@ -3,6 +3,9 @@ package com.its22.vhodtaksi
 import android.content.Context
 import java.util.Locale
 
+/** Версия на приложението - показва се в Настройки, за да се вижда коя версия е инсталирана */
+const val APP_VERSION = "v1 · 2026-07-18 11:05 · подпис + без печат"
+
 /** Апартамент от входа */
 data class Apartment(
     val number: String,

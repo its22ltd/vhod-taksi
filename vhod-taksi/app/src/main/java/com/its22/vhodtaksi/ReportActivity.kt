@@ -39,21 +39,22 @@ class ReportActivity : AppCompatActivity() {
         val unpaidTotal = Calc.round2(unpaidRows.sumOf { it.due.total })
 
         val sb = StringBuilder()
-        sb.append("Период: ").append(period).append("\n")
-        sb.append("Дължимо общо: ").append(money2(dueTotal)).append(" ").append(cur).append("\n")
-        sb.append("Събрано: ").append(money2(sum)).append(" ").append(cur)
-        sb.append("  (").append(cnt).append(" от ").append(apts.size).append(" ап.)\n")
-        sb.append("Неплатено: ").append(money2(unpaidTotal)).append(" ").append(cur)
-        sb.append("  (").append(unpaidRows.size).append(" ап.)")
+        sb.append("СПРАВКА — ").append(period).append("\n\n")
+        sb.append("Дължимо общо:  ").append(money2(dueTotal)).append(" ").append(cur).append("\n")
+        sb.append("Събрано:  ").append(money2(sum)).append(" ").append(cur)
+        sb.append("   (").append(cnt).append(" платили)\n")
+        sb.append("Остава да съберете:  ").append(money2(unpaidTotal)).append(" ").append(cur)
+        sb.append("   (").append(unpaidRows.size).append(" неплатили)")
         findViewById<TextView>(R.id.tvReport).text = sb.toString()
 
         rv = findViewById(R.id.rvStatus)
         rv.layoutManager = LinearLayoutManager(this)
         rv.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
-        bind(false)
 
         val cb = findViewById<CheckBox>(R.id.cbUnpaid)
+        cb.isChecked = true
         cb.setOnCheckedChangeListener { _, checked -> bind(checked) }
+        bind(true)
 
         findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPrintReport)
             .setOnClickListener {
@@ -84,7 +85,9 @@ class ReportActivity : AppCompatActivity() {
             .setNegativeButton("Затвори", null)
         if (row.paid) {
             b.setPositiveButton("Печат отново") { _, _ ->
-                printLines(Receipts.payment(this, a, d, rate, period, System.currentTimeMillis()))
+                val rec = Db(this).paymentFor(period, a.number)
+                val sig = if (rec != null) Signatures.load(this, rec.uuid) else null
+                printLines(Receipts.payment(this, a, d, rate, period, rec?.ts ?: System.currentTimeMillis(), sig))
             }
         }
         b.show()

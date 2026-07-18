@@ -39,6 +39,7 @@ class SettingsActivity : AppCompatActivity() {
         etToken.setText(Prefs.serverToken(this))
         updatePrinterLabel(tvPrinter)
         updateWidthLabel(tvWidth)
+        findViewById<TextView>(R.id.tvVersion).text = "Версия: " + APP_VERSION
 
         findViewById<MaterialButton>(R.id.btnPickPrinter).setOnClickListener { pickPrinter(tvPrinter) }
         findViewById<MaterialButton>(R.id.btnWidth).setOnClickListener { pickWidth(tvWidth) }

@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using System.Data;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -50,10 +51,11 @@ MERGE Payments AS tgt
 USING (SELECT @Uuid AS Uuid) AS src ON tgt.Uuid = src.Uuid
 WHEN MATCHED THEN UPDATE SET
     Device=@Device, Apt=@Apt, Name=@Name, People=@People, Period=@Period,
-    Amount=@Amount, Personal=@Personal, ElevatorShare=@Elevator, OtherShare=@Other, Ts=@Ts
+    Amount=@Amount, Personal=@Personal, ElevatorShare=@Elevator, OtherShare=@Other, Ts=@Ts,
+    Signature=@Signature
 WHEN NOT MATCHED THEN INSERT
-    (Uuid, Device, Apt, Name, People, Period, Amount, Personal, ElevatorShare, OtherShare, Ts)
-    VALUES (@Uuid, @Device, @Apt, @Name, @People, @Period, @Amount, @Personal, @Elevator, @Other, @Ts);";
+    (Uuid, Device, Apt, Name, People, Period, Amount, Personal, ElevatorShare, OtherShare, Ts, Signature)
+    VALUES (@Uuid, @Device, @Apt, @Name, @People, @Period, @Amount, @Personal, @Elevator, @Other, @Ts, @Signature);";
 
             cmd.Parameters.AddWithValue("@Uuid", uuid);
             cmd.Parameters.AddWithValue("@Device", device);
@@ -66,6 +68,15 @@ WHEN NOT MATCHED THEN INSERT
             cmd.Parameters.AddWithValue("@Elevator", GetDec(r, "elevatorShare"));
             cmd.Parameters.AddWithValue("@Other", GetDec(r, "otherShare"));
             cmd.Parameters.AddWithValue("@Ts", GetLong(r, "ts"));
+
+            var sigB64 = GetStr(r, "signature");
+            object sigVal = DBNull.Value;
+            if (!string.IsNullOrEmpty(sigB64))
+            {
+                try { sigVal = Convert.FromBase64String(sigB64); } catch { /* пропускаме невалиден подпис */ }
+            }
+            var sigParam = cmd.Parameters.Add("@Signature", SqlDbType.VarBinary, -1);
+            sigParam.Value = sigVal;
 
             await cmd.ExecuteNonQueryAsync();
             saved++;
@@ -110,6 +121,29 @@ app.MapGet("/api/report", async (HttpRequest req) =>
         total = rd.GetDecimal(1);
     }
     return Results.Json(new { ok = true, period, count, total });
+});
+
+// Връща подписа като PNG изображение: /api/signature?token=...&uuid=...
+app.MapGet("/api/signature", async (HttpRequest req) =>
+{
+    var token = req.Query["token"].ToString();
+    if (token != ApiToken())
+        return Results.Text("bad token", statusCode: 401);
+
+    var uuid = req.Query["uuid"].ToString();
+    if (string.IsNullOrEmpty(uuid))
+        return Results.Text("no uuid", statusCode: 400);
+
+    await using var conn = new SqlConnection(ConnStr());
+    await conn.OpenAsync();
+    var cmd = conn.CreateCommand();
+    cmd.CommandText = "SELECT Signature FROM Payments WHERE Uuid=@u";
+    cmd.Parameters.AddWithValue("@u", uuid);
+    var result = await cmd.ExecuteScalarAsync();
+    if (result == null || result is DBNull)
+        return Results.Text("no signature", statusCode: 404);
+
+    return Results.File((byte[])result, "image/png");
 });
 
 app.Run();

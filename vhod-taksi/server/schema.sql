@@ -22,10 +22,16 @@ BEGIN
         ElevatorShare  DECIMAL(10,2) NOT NULL,
         OtherShare     DECIMAL(10,2) NOT NULL,
         Ts             BIGINT        NOT NULL,
+        Signature      VARBINARY(MAX) NULL,
         CreatedAt      DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME()
     );
 
     CREATE INDEX IX_Payments_Period ON Payments(Period);
     CREATE INDEX IX_Payments_Apt    ON Payments(Apt);
 END
+GO
+
+-- Ако таблицата вече съществува без колоната за подпис - добавяме я
+IF COL_LENGTH('Payments', 'Signature') IS NULL
+    ALTER TABLE Payments ADD Signature VARBINARY(MAX) NULL;
 GO

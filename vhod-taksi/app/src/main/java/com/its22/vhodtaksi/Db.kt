@@ -93,6 +93,12 @@ class Db(ctx: Context) : SQLiteOpenHelper(ctx.applicationContext, "vhod.db", nul
     fun forPeriod(period: String): List<PaymentRecord> =
         readList("SELECT $cols FROM payment WHERE period = ? ORDER BY ts DESC", arrayOf(period))
 
+    fun paymentFor(period: String, apt: String): PaymentRecord? =
+        readList(
+            "SELECT $cols FROM payment WHERE period = ? AND apt = ? ORDER BY ts DESC LIMIT 1",
+            arrayOf(period, apt)
+        ).firstOrNull()
+
     fun unsynced(): List<PaymentRecord> =
         readList("SELECT $cols FROM payment WHERE synced = 0 ORDER BY ts ASC", null)
 

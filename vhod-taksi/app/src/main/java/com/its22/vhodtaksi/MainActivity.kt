@@ -3,10 +3,15 @@ package com.its22.vhodtaksi
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -37,9 +42,6 @@ class MainActivity : AppCompatActivity() {
         rv.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
 
         btnPeriod.setOnClickListener { showPeriodDialog() }
-        findViewById<MaterialButton>(R.id.btnData).setOnClickListener {
-            startActivity(Intent(this, DataActivity::class.java))
-        }
         findViewById<MaterialButton>(R.id.btnReport).setOnClickListener {
             startActivity(Intent(this, ReportActivity::class.java))
         }
@@ -76,17 +78,21 @@ class MainActivity : AppCompatActivity() {
     private fun showPeriodDialog() {
         val periods = Prefs.periods(this)
         val items = ArrayList<String>()
-        for (p in periods) items.add(p)
-        items.add("＋ Генерирай нов месец")
+        for (p in periods) items.add("📅  " + p)
+        val editIdx = items.size
+        items.add("✎  Редактирай данните за " + Prefs.period(this))
+        items.add("＋  Генерирай нов месец")
         val arr = items.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle("Изберете месец")
+            .setTitle("Месец")
             .setItems(arr) { _, which ->
-                if (which < periods.size) {
-                    Prefs.setPeriod(this, periods[which])
-                    refresh()
-                } else {
-                    newMonthDialog()
+                when {
+                    which < periods.size -> {
+                        Prefs.setPeriod(this, periods[which])
+                        refresh()
+                    }
+                    which == editIdx -> startActivity(Intent(this, DataActivity::class.java))
+                    else -> newMonthDialog()
                 }
             }
             .show()
@@ -126,6 +132,9 @@ class MainActivity : AppCompatActivity() {
         val d = row.due
         val a = row.apt
         val cur = Prefs.currency(this)
+        val density = resources.displayMetrics.density
+        val pad = (16 * density).toInt()
+
         val sb = StringBuilder()
         sb.append("Персонална сума: ").append(money2(d.personal)).append(" ").append(cur).append("\n")
         if (a.paysElevator && d.elevatorShare > 0.0)
@@ -133,12 +142,56 @@ class MainActivity : AppCompatActivity() {
                 .append("): ").append(money2(d.elevatorShare)).append(" ").append(cur).append("\n")
         sb.append("Други (").append(a.people).append(" x ").append(money2(rate.ratePerOther))
             .append("): ").append(money2(d.otherShare)).append(" ").append(cur).append("\n\n")
-        sb.append("ОБЩО: ").append(money2(d.total)).append(" ").append(cur)
+        sb.append("ОБЩО:  ").append(money2(d.total)).append(" ").append(cur)
+
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(pad, pad / 2, pad, 0)
+
+        val tv = TextView(this)
+        tv.text = sb.toString()
+        tv.textSize = 15f
+        box.addView(tv)
+
+        val hint = TextView(this)
+        hint.text = "Подпис на живущия (с пръст):"
+        hint.textSize = 13f
+        val hLp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        hLp.topMargin = (12 * density).toInt()
+        hint.layoutParams = hLp
+        box.addView(hint)
+
+        val sig = SignatureView(this)
+        val sLp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (260 * density).toInt()
+        )
+        sLp.topMargin = (4 * density).toInt()
+        sig.layoutParams = sLp
+        val bg = GradientDrawable()
+        bg.setColor(Color.WHITE)
+        bg.setStroke((2 * density).toInt(), Color.GRAY)
+        sig.background = bg
+        box.addView(sig)
+
+        val clear = Button(this)
+        clear.text = "Изчисти подписа"
+        clear.setOnClickListener { sig.clear() }
+        box.addView(clear)
+
+        val scroll = ScrollView(this)
+        scroll.addView(box)
 
         AlertDialog.Builder(this)
             .setTitle("Ап. " + a.number + (if (a.name.isNotBlank()) " — " + a.name else ""))
-            .setMessage(sb.toString())
-            .setPositiveButton("Плати и печат") { _, _ -> collectAndPrint(row, rate, period) }
+            .setView(scroll)
+            .setPositiveButton("Плати и печат") { _, _ ->
+                collect(row, rate, period, true, if (sig.hasContent) sig.getBitmap() else null)
+            }
+            .setNeutralButton("Плати без печат") { _, _ ->
+                collect(row, rate, period, false, if (sig.hasContent) sig.getBitmap() else null)
+            }
             .setNegativeButton("Отказ", null)
             .show()
     }
@@ -148,13 +201,21 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Ап. " + row.apt.number + " — вече платено")
             .setMessage("Сумата " + eur(this, row.due.total) + " вече е отбелязана за " + period + ".\nДа отпечатам ли бележката отново?")
             .setPositiveButton("Печат отново") { _, _ ->
-                printLines(Receipts.payment(this, row.apt, row.due, rate, period, System.currentTimeMillis()))
+                val rec = Db(this).paymentFor(period, row.apt.number)
+                val sig = if (rec != null) Signatures.load(this, rec.uuid) else null
+                printLines(Receipts.payment(this, row.apt, row.due, rate, period, rec?.ts ?: System.currentTimeMillis(), sig))
             }
             .setNegativeButton("Затвори", null)
             .show()
     }
 
-    private fun collectAndPrint(row: ApartmentAdapter.Row, rate: Calc.Result, period: String) {
+    private fun collect(
+        row: ApartmentAdapter.Row,
+        rate: Calc.Result,
+        period: String,
+        print: Boolean,
+        signature: Bitmap?
+    ) {
         val a = row.apt
         val d = row.due
         val ts = System.currentTimeMillis()
@@ -173,8 +234,13 @@ class MainActivity : AppCompatActivity() {
             synced = false
         )
         Db(this).insert(rec)
+        Signatures.save(this, rec.uuid, signature)
         refresh()
-        printLines(Receipts.payment(this, a, d, rate, period, ts))
+        if (print) {
+            printLines(Receipts.payment(this, a, d, rate, period, ts, signature))
+        } else {
+            Toast.makeText(this, "Отбелязано като платено (без печат)", Toast.LENGTH_SHORT).show()
+        }
         trySyncSilently()
     }
 
