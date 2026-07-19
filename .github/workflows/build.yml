@@ -5,19 +5,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Unzip latest project
+        run: |
+          ZIP=$(ls Vxod_*.zip | sort | tail -1)
+          echo "Building from: $ZIP"
+          rm -rf _src && unzip -oq "$ZIP" -d _src
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
       - name: Build APK
-        working-directory: vhod-taksi
+        working-directory: _src/vhod-taksi
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
       - name: Rename APK
         id: tag
-        working-directory: vhod-taksi
+        working-directory: _src/vhod-taksi
         run: |
           TAG="$(TZ=Europe/Sofia date +%Y-%m-%d_%H-%M)_build${{ github.run_number }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -26,5 +31,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Vxod_${{ steps.tag.outputs.tag }}
-          path: vhod-taksi/out/Vxod_${{ steps.tag.outputs.tag }}.apk
+          path: _src/vhod-taksi/out/Vxod_${{ steps.tag.outputs.tag }}.apk
           if-no-files-found: error
